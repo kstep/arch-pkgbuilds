@@ -1,0 +1,61 @@
+# Maintainer: Konstantin Stepanov <me@kstep.me>
+pkgname=lua-fs-hg
+pkgver=0.3hg
+pkgrel=1
+pkgdesc="Lua FS operations bindings"
+arch=('i686' 'x86_64')
+url="http://www.steve.org.uk/Software/lua-fs/"
+license=('GPL')
+groups=()
+depends=('lua>=5.1')
+makedepends=('mercurial' 'sed')
+optdepends=()
+provides=('lua-fs')
+conflicts=()
+replaces=()
+backup=()
+options=()
+install=
+changelog=
+source=()
+noextract=()
+md5sums=() #generate with 'makepkg -g'
+
+_hgroot="http://lua-fs.repository.steve.org.uk/"
+_hgname="lua-fs"
+
+build() {
+  cd "$srcdir"
+  msg "Connecting to Mercurial server...."
+
+  if [[ -d "$_hgname" ]]; then
+    cd "$_hgname" && hg pull
+    msg "The local files are updated."
+  else
+    hg clone "$_hgroot" "$_hgname"
+  fi
+
+  msg "Mercurial checkout done or server timeout"
+  msg "Starting build..."
+
+  rm -rf "$srcdir/$_hgname-build"
+  hg clone "$srcdir/$_hgname" "$srcdir/$_hgname-build"
+  cd "$srcdir/$_hgname-build"
+
+  msg "Patching sources..."
+  sed -i.bak 's/^LIBPATH\s\+=\s\+/&$(DESTDIR)/;s/^MODPATH\s\+=\s\+/&$(DESTDIR)/' Makefile
+  cat <<PRELUDE > default.lua.new
+_REQUIREDNAME = ...
+local loadlib = package.loadlib
+PRELUDE
+  cat default.lua >> default.lua.new
+  mv default.lua.new default.lua
+
+  make
+}
+
+package() {
+  cd "$srcdir/$_hgname-build"
+  make DESTDIR="$pkgdir/" install
+}
+

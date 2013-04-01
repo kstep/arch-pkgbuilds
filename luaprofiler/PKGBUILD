@@ -1,0 +1,27 @@
+# Maintainer: Konstantin Stepanov <me@kstep.me>
+pkgname=luaprofiler
+pkgver=2.0.2
+pkgrel=1
+pkgdesc="LuaProfiler can profile programs written in Lua and in CGILua."
+arch=('i686' 'x86_64')
+url="http://luaforge.net/projects/luaprofiler/"
+license=('GPL')
+groups=()
+depends=(lua51)
+makedepends=(make gcc)
+source=($pkgname-$pkgver.tar.gz::http://files.luaforge.net/releases/luaprofiler/LuaProfiler/LuaProfiler2.0.2/luaprofiler-2.0.2.tar.gz)
+md5sums=('611435c8e61e1a330ee0aa8ddc9c124a') #generate with 'makepkg -g'
+
+build() {
+  cd "$srcdir/$pkgname-$pkgver"
+
+  make LUA_INCLUDE=/usr/include/lua5.1 CC="gcc -fPIC" -f Makefile.linux
+}
+
+package() {
+  cd "$srcdir/$pkgname-$pkgver"
+
+  mkdir -p "$pkgdir/usr/lib/lua/5.1"
+  install -m 0755 bin/profiler.so "$pkgdir/usr/lib/lua/5.1"
+}
+

@@ -1,0 +1,26 @@
+pkgname=evtxparser
+pkgver=1.1.1
+pkgrel=1
+pkgdesc="Evtx parser library and the Perl script collection is for reading Windows event logs"
+arch=('any')
+url="http://computer.forensikblog.de/"
+license=('GPL')
+source=("http://computer.forensikblog.de/files/evtx/Parse-Evtx-${pkgver}.zip")
+md5sums=('d728fad115d2a8b048a4858ac56f70c9')
+makedepends=(unzip)
+#perl-data-hexify absent from repos, install via cpan install Data::Hexify
+#depends=(perl perl-carp-assert perl-datetime perl-digest-crc perl-data-hexify)
+depends=(perl perl-carp-assert perl-datetime perl-digest-crc)
+
+build() {
+  cd "$srcdir"
+
+  unzip Parse-Evtx-${pkgver}.zip
+  cd Parse-Evtx-${pkgver}
+  perl Makefile.PL
+
+  make PREFIX=/usr
+
+}
+
+# vim:set ts=2 sw=2 et:

@@ -1,0 +1,29 @@
+# Maintainer: Konstantin Stepanov <me@kstep.me>
+
+pkgname=meandmyshadow
+pkgdesc='Puzzle/platform game written by Luka Horvat.'
+url='http://meandmyshadow.sourceforge.net/index.html'
+pkgrel=1
+pkgver=0.2
+arch=('i686' 'x86_64')
+provides=('meandmyshadow')
+source=("$pkgname-$pkgver-src.tar.gz::https://sourceforge.net/projects/$pkgname/files/0.2/$pkgname-$pkgver-src.tar.gz/download")
+md5sums=('3736880e6c52135f1ac2fd56e6df566a')
+depends=(sdl sdl_image sdl_ttf sdl_mixer sdl_gfx curl libarchive)
+makedepends=(cmake make gcc)
+license=('GPL')
+
+build() {
+  cd "$srcdir/$pkgname-$pkgver"
+
+  cmake -D CMAKE_INSTALL_PREFIX:PATH=/usr .
+  make
+}
+
+package() {
+  cd "$srcdir/$pkgname-$pkgver"
+
+  make DESTDIR=$pkgdir install
+}
+
+# vim:set ts=2 sw=2 et:
