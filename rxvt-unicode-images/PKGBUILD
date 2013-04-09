@@ -1,0 +1,28 @@
+# Maintainer: Konstantin Stepanov <me@kstep.me>
+pkgname=rxvt-unicode-images
+pkgorigname=rxvt-unicode
+pkgver=9.18
+pkgrel=1
+pkgdesc="URxvt with images patches"
+arch=('i686' 'x86_64')
+url="http://software.schmorp.de/pkg/rxvt-unicode.html"
+license=('GPL')
+source=($pkgorigname-$pkgver.tar.gz::http://dist.schmorp.de/$pkgorigname/$pkgorigname-$pkgver.tar.bz2
+        images-patch.patch)
+md5sums=('963ccc748fe5bca925e7b92c0404d68b'
+         'f43ec2f1ea15cb964fda85425f45366a')
+
+build() {
+  cd "$srcdir/$pkgorigname-$pkgver"
+
+  patch -p1 < "$srcdir/images-patch.patch"
+  ./configure --prefix=/usr --enable-pixbuf --enable-images
+  make
+}
+
+package() {
+  cd "$srcdir/$pkgorigname-$pkgver"
+
+  make DESTDIR="$pkgdir/" install
+}
+

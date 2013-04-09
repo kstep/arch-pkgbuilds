@@ -1,0 +1,1299 @@
+diff --git a/MANIFEST b/MANIFEST
+index feabd71..b081cbf 100644
+--- a/MANIFEST
++++ b/MANIFEST
+@@ -27,6 +27,7 @@ doc/.cvsignore
+ doc/Makefile.in
+ doc/README.xvt
+ doc/changes.txt
++doc/images.txt
+ doc/podtbl
+ 
+ doc/rxvt.1.pod
+@@ -87,6 +88,9 @@ src/version.h
+ src/xdefaults.C
+ src/emman.h
+ src/emman.c
++src/image.h
++src/image.C
++src/image.C
+ 
+ libptytty/Changes
+ libptytty/ptytty.m4
+diff --git a/config.h.in b/config.h.in
+index eef30e0..d5e06df 100644
+--- a/config.h.in
++++ b/config.h.in
+@@ -63,6 +63,9 @@
+ /* Define to 1 if you have the `getpt' function. */
+ #undef HAVE_GETPT
+ 
++/* Define if you want to urxvt to display images */
++#undef HAVE_IMAGES
++
+ /* Define to 1 if you have the `inotify_init' function. */
+ #undef HAVE_INOTIFY_INIT
+ 
+diff --git a/configure b/configure
+index 1b79b7c..c2d0303 100755
+--- a/configure
++++ b/configure
+@@ -630,6 +630,9 @@ PERL
+ XFT_CONFIG
+ STARTUP_NOTIFICATION_LIBS
+ STARTUP_NOTIFICATION_CFLAGS
++IMAGES_O
++IMAGES_LIBS
++IMAGES_CFLAGS
+ PIXBUF_LIBS
+ PIXBUF_CFLAGS
+ PKG_CONFIG
+@@ -718,6 +721,7 @@ enable_combining
+ enable_xft
+ enable_font_styles
+ enable_pixbuf
++enable_images
+ enable_startup_notification
+ enable_transparency
+ enable_fading
+@@ -1391,6 +1395,7 @@ Optional Features:
+   --enable-xft            enable xft support on systems that have it
+   --enable-font-styles    enable bold and italic support
+   --enable-pixbuf         enable integration with gdk-pixbuf for background images
++  --enable-images         enable the display of images inside the terminal
+   --enable-startup-notification  enable freedesktop startup notification support
+   --enable-transparency   enable transparent backgrounds
+   --enable-fading         enable colors fading when off focus
+@@ -4684,6 +4689,7 @@ support_scroll_next=yes
+ support_scroll_xterm=yes
+ support_xim=yes
+ support_pixbuf=yes
++support_images=no
+ support_startup_notification=yes
+ support_xft=yes
+ support_unicode3=no
+@@ -4716,6 +4722,7 @@ if test "${enable_everything+set}" = set; then :
+        support_wtmp=no
+        support_xim=no
+        support_pixbuf=no
++       support_images=no
+        support_startup_notification=no
+        support_xft=no
+        support_unicode3=no
+@@ -4744,6 +4751,7 @@ if test "${enable_everything+set}" = set; then :
+        support_wtmp=yes
+        support_xim=yes
+        support_pixbuf=yes
++       support_images=yes
+        support_startup_notification=yes
+        support_xft=yes
+        support_unicode3=yes
+@@ -4860,6 +4868,13 @@ if test "${enable_pixbuf+set}" = set; then :
+ fi
+ 
+ 
++# Check whether --enable-images was given.
++if test "${enable_images+set}" = set; then :
++  enableval=$enable_images; if test x$enableval = xyes -o x$enableval = xno; then
++    support_images=$enableval
++  fi
++fi
++
+ # Check whether --enable-startup-notification was given.
+ if test "${enable_startup_notification+set}" = set; then :
+   enableval=$enable_startup_notification; if test x$enableval = xyes -o x$enableval = xno; then
+@@ -6277,6 +6292,10 @@ image_lib=none
+ PIXBUF_CFLAGS=
+ PIXBUF_LIBS=
+ 
++IMAGES_CFLAGS=
++IMAGES_LIBS=
++IMAGES_O=
++
+ if test x$support_pixbuf = xyes; then
+   support_pixbuf=no
+   # Extract the first word of "pkg-config", so it can be a program name with args.
+@@ -6339,11 +6358,34 @@ $as_echo "#define HAVE_PIXBUF 1" >>confdefs.h
+     { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+ $as_echo "no" >&6; }
+   fi
++
++  # this relies on core-pixbuf too
++  if test x$support_pixbuf = xyes && test x$support_images = xyes; then
++     { $as_echo "$as_me:${as_lineno-$LINENO}: checking for gdk-pixbuf-xlib-2.0" >&5
++$as_echo_n "checking for gdk-pixbuf-xlib-2.0... " >&6; }
++     if $PKG_CONFIG --exists gdk-pixbuf-xlib-2.0; then
++        IMAGES_CFLAGS="`$PKG_CONFIG gdk-pixbuf-xlib-2.0 --cflags`"
++	IMAGES_LIBS="`$PKG_CONFIG gdk-pixbuf-xlib-2.0 --libs`"
++	IMAGES_O=image.o
++	{ $as_echo "$as_me:${as_lineno-$LINENO}: result: ok" >&5
++$as_echo "ok" >&6; }
++
++$as_echo "#define HAVE_IMAGES 1" >>confdefs.h
++
++     else
++	{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
++$as_echo "no" >&6; }
++     fi
++  fi
+ fi
+ 
+ 
+ 
+ 
++
++
++
++
+ STARTUP_NOTIFICATION_CFLAGS=
+ STARTUP_NOTIFICATION_LIBS=
+ 
+diff --git a/configure.ac b/configure.ac
+index d858d00..4982759 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -89,6 +89,7 @@ support_scroll_next=yes
+ support_scroll_xterm=yes
+ support_xim=yes
+ support_pixbuf=yes
++support_images=no
+ support_startup_notification=yes
+ support_xft=yes
+ support_unicode3=no
+@@ -125,6 +126,7 @@ AC_ARG_ENABLE(everything,
+        support_wtmp=no
+        support_xim=no
+        support_pixbuf=no
++       support_images=no
+        support_startup_notification=no
+        support_xft=no
+        support_unicode3=no
+@@ -153,6 +155,7 @@ AC_ARG_ENABLE(everything,
+        support_wtmp=yes
+        support_xim=yes
+        support_pixbuf=yes
++       support_images=yes
+        support_startup_notification=yes
+        support_xft=yes
+        support_unicode3=yes
+@@ -231,6 +234,11 @@ AC_ARG_ENABLE(pixbuf,
+     support_pixbuf=$enableval
+   fi])
+ 
++AC_ARG_ENABLE(images,
++  [  --enable-images         enable the display of images inside the terminal],
++  [if test x$enableval = xyes -o x$enableval = xno; then
++    support_images=$enableval
++  fi])
+ AC_ARG_ENABLE(startup-notification,
+   [  --enable-startup-notification  enable freedesktop startup notification support],
+   [if test x$enableval = xyes -o x$enableval = xno; then
+@@ -428,6 +436,10 @@ image_lib=none
+ PIXBUF_CFLAGS=
+ PIXBUF_LIBS=
+ 
++IMAGES_CFLAGS=
++IMAGES_LIBS=
++IMAGES_O=
++
+ if test x$support_pixbuf = xyes; then
+   support_pixbuf=no
+   AC_PATH_PROG(PKG_CONFIG, pkg-config, no)
+@@ -445,11 +457,29 @@ if test x$support_pixbuf = xyes; then
+   else
+     AC_MSG_RESULT(no)
+   fi
++
++  # this relies on core-pixbuf too
++  if test x$support_pixbuf = xyes && test x$support_images = xyes; then
++     AC_MSG_CHECKING(for gdk-pixbuf-xlib-2.0)
++     if $PKG_CONFIG --exists gdk-pixbuf-xlib-2.0; then
++        IMAGES_CFLAGS="`$PKG_CONFIG gdk-pixbuf-xlib-2.0 --cflags`"
++	IMAGES_LIBS="`$PKG_CONFIG gdk-pixbuf-xlib-2.0 --libs`"
++	IMAGES_O=image.o
++	AC_MSG_RESULT(ok)
++	AC_DEFINE(HAVE_IMAGES, 1, Define if you want to display images inside urxvt)
++     else
++	AC_MSG_RESULT(no)
++     fi
++  fi
+ fi
+ 
+ AC_SUBST(PIXBUF_CFLAGS)
+ AC_SUBST(PIXBUF_LIBS)
+ 
++AC_SUBST(IMAGES_CFLAGS)
++AC_SUBST(IMAGES_LIBS)
++AC_SUBST(IMAGES_O)
++
+ STARTUP_NOTIFICATION_CFLAGS=
+ STARTUP_NOTIFICATION_LIBS=
+ 
+diff --git a/doc/images.txt b/doc/images.txt
+new file mode 100644
+index 0000000..a0143c7
+--- /dev/null
++++ b/doc/images.txt
+@@ -0,0 +1,97 @@
++This document how images are handled by urxvt.
++Images are only XImage (through gdkpixbuf) which are displayed over
++the characters area. Their position is kept consistent across terminal
++actions.
++
++Code: 21
++$ printf '\33]21;<FORMAT>\007'
++
++Simple example:
++$ printf '\33]21;hello.jpg\007'
++
++Full <FORMAT> is:
++  <filename>;[flag[:<flag-options>];]...
++
++
++  <filename> is an absolute path-name
++  <options> are colon-separated words.
++  flag could be:
++
++  - "pad": about padding: Padding is not about the area around the image,
++    	   but area "under" the image.
++    Options are:
++    - horiz: add horizontal padding (ie move the "cursor" horizontally).
++      	     The cursor will stay on the same line while moving right the
++	     needed number of columns according to image width.
++    - vert: add vertical padding (ie move the "cursor" vertically X times
++      	    according to image height).
++      	    The next characters or images displayed will not override the
++	    image vertically nor horizontally.
++	    Unless "horiz" is set, "vert" set cursor column to 0, ie:
++	    the cursor will start at the beginning of the next usable line.
++    - nohoriz: this keeps the cursor from moving horizontally after the
++      	       image is displayed.
++    - novert: this keeps the cursor from moving vertically after the
++      	      image is displayed. This is used to display images "inline".
++    - nocum: by default, when "novert" is used, vertical spacing is needed
++      	     to avoid the next prompt to override images. This option,
++	     mostly useful with "novert" ensure that successive vertical
++	     spacing are "stored" and "additioned" so that, after the first
++	     image ending the line ("vert"), a correct number of newlines is
++	     added. See the "flush" flag.
++
++
++    Default is: "vert"
++    If "novert" is used, default becomes "horiz" + "nocum"
++
++
++  - "dim": about dimensions of the image.
++    Options are:
++    - scale: Scale the image to the exact width and height specified.
++      	     If exactly one of width or height is -1, scale will
++	     respect the image ratio.
++    - size: Scale down the image to at most WxH while always preserving
++	    the ratio.
++	    Both width and height (unsigned int) must be specified.
++    - %dx%d: Any other value is passed to sscanf("%dx%d") and treated as
++      	     the couple of dimension separated by the "x" character.
++
++    Default is to not apply any transformation to the image.
++    If only a valid couple of dimensions are provided, default are:
++    - scale: if one of the dimension is -1
++    - size: if both dimensions are positive
++    no dimensioning is done otherwise
++
++
++  - "pos": about positioning.
++    Options are:
++    - rel: position is relative to the current cursor position.
++    - abs: position is relative to the current top-left edge of the visible
++      	   area of the terminal.
++    - eol: the image is put at the nearest to end-of-line possible position.
++    - %dx%d: Any other value is passed to sscanf("%dx%d") and treated as
++      	     the couple of coordinates separated by the "x" character.
++
++    Default is to not apply any coordinate-based positioning to the image.
++    If only coordinates are provided, default are:
++    - abs: if one coordinate is negative
++    - rel: otherwise
++
++    If "abs" or "rel" is used, every padding-related options are ignored
++    and spacing (cursor movement), if needed, must be handled manually.
++    If "eol" is used, padding-related options apply.
++
++
++  - "flush": this flag relates to padding. If used, filename must be empty or
++    	     non-existent. If a queued vertical-padding exists (after one or
++	     multiple inline'd images were displayed (using "novert"), then
++	     newlines will finally be printed.
++	     This flags does not take options.
++
++
++  - "wrap": not implemented yet. No options are available.
++    This flag set the behavior when resizing occurs.
++    If "wrap" is set and resizing-down occurs, image will wrap if it can't
++    fit in the space between it's left edge and the right border of the terminal.
++    If pos:eol is set, and resizing-up occurs images will always stick to the
++    right border of the terminal.
+diff --git a/src/Makefile.in b/src/Makefile.in
+index 33c950c..e136c7b 100644
+--- a/src/Makefile.in
++++ b/src/Makefile.in
+@@ -21,8 +21,8 @@ CPPFLAGS = @CPPFLAGS@
+ LDFLAGS = @LDFLAGS@
+ DEFS = @DEFS@
+ LIBS = @LIBS@
+-XINC = @X_CFLAGS@ @PIXBUF_CFLAGS@ @STARTUP_NOTIFICATION_CFLAGS@
+-XLIB = @X_LIBS@ -lX11 @X_EXTRA_LIBS@ @PIXBUF_LIBS@ @STARTUP_NOTIFICATION_LIBS@
++XINC = @X_CFLAGS@ @PIXBUF_CFLAGS@ @STARTUP_NOTIFICATION_CFLAGS@ @IMAGES_CFLAGS@
++XLIB = @X_LIBS@ -lX11 @X_EXTRA_LIBS@ @PIXBUF_LIBS@ @STARTUP_NOTIFICATION_LIBS@ @IMAGES_LIBS@
+ COMPILE = $(CXX) -I.. -I$(srcdir) -I. -I$(srcdir)/../libev -I$(srcdir)/../libptytty/src $(DEFS) $(CPPFLAGS) $(CXXFLAGS) $(XINC)
+ LINK = @LINKER@ $(LDFLAGS)
+ EXEEXT = @EXEEXT@
+@@ -40,7 +40,7 @@ COMMON = \
+ 	screen.o scrollbar.o scrollbar-next.o scrollbar-rxvt.o \
+ 	scrollbar-xterm.o scrollbar-plain.o xdefaults.o encoding.o \
+ 	rxvttoolkit.o rxvtutil.o keyboard.o rxvtimg.o \
+-	ev_cpp.o fdpass_wrapper.o ptytty_wrapper.o @PERL_O@
++	ev_cpp.o fdpass_wrapper.o ptytty_wrapper.o @PERL_O@ @IMAGES_O@
+ 
+ COMMON_DAEMON = rxvtdaemon.o
+ 
+@@ -146,6 +146,7 @@ depend:
+ 
+ # DO NOT DELETE: nice dependency list follows
+ 
++image.o: ../config.h rxvt.h image.h
+ background.o: ../config.h rxvt.h feature.h ../libptytty/src/ecb.h encoding.h
+ background.o: rxvtutil.h ../libptytty/src/estl.h emman.h rxvtfont.h
+ background.o: rxvttoolkit.h ev_cpp.h ../config.h ../libev/ev++.h
+diff --git a/src/command.C b/src/command.C
+index ab1a4cd..09d9828 100644
+--- a/src/command.C
++++ b/src/command.C
+@@ -1989,6 +1989,10 @@ rxvt_term::button_press (XButtonEvent &ev)
+         }
+ 
+       MEvent.time = ev.time;
++
++#ifdef HAVE_IMAGES
++      render_pictures();
++#endif
+       return;
+     }
+ 
+@@ -3523,6 +3527,12 @@ rxvt_term::process_xterm_seq (int op, char *str, char resp)
+         break;
+ #endif
+ 
++#ifdef HAVE_IMAGES
++      case Rxvt_Images:
++	      if (*str != ';') register_picture(str);
++	      break;
++#endif
++
+       case XTerm_logfile:
+         // TODO, when secure mode?
+         break;
+@@ -4075,5 +4085,99 @@ void rxvt_term::pty_write ()
+     pty_ev.set (ev::READ);
+ }
+ 
++
++#ifdef HAVE_IMAGES
++
++
++#define UNSCROLLED	(view_start == 0)
++// UNSCROLLED, is false if we are at the very bottom
++// of the screen and added newlines are going to push
++// the image up to the top of the visible area
++#define IMAGE_TOP_FULLY_VISIBLE(I) (I->pos.row >= top_no() + ( UNSCROLLED ? 0 : -1 ))
++// true if fully visible only
++#define IMAGE_FULLY_VISIBLE(I)	(IMAGE_TOP_FULLY_VISIBLE(I) && I->bottom_fully_visible())
++
++
++/*
++  There are also cases where images needs to be redrawn again
++  but the terminal did not changed.
++
++  2 cases:
++  - selecting over the image
++  - focus in/out
++
++  TODO////
++*/
++
++void rxvt_term::register_picture(const char *str) {
++	unsigned int flags;
++	int sw, sh, x, y;
++	char *file = NULL;
++
++	GdkPixbuf *new_image;
++	_InTermImage *InTermImage;
++
++	_InTermImage::pictures_parse_params(str, file, flags, sw, sh, x, y);
++	// printf("file = %s, flags = %d, sw = %d, sh = %d\n", file, flags, sw, sh);
++	// fprintf(stderr, "[reg] row = %d, nrow = %d, term_start = %d, view_start = %d\n", screen.cur.row, nrow, term_start, view_start);
++
++	if (!file || ! (new_image = _InTermImage::getGdkPixbuf(file, flags, sw, sh))) {
++		if(flags & IMG_FLUSH && pictures_next_vpad) {
++			screen.cur.col = 0;
++			while (pictures_next_vpad--) scr_index(UP);
++			pictures_next_vpad = 0;
++		}
++		return;
++	}
++
++	InTermImage = new _InTermImage(this, strdup(file), new_image, flags);
++	InTermImage->set_pos(x, y);
++	InTermImage->set_cursor();
++	TermImages.push_back(InTermImage);
++	want_refresh = 1;
++	// after scr_index(UP) from the above set_pos(), and if a picture
++	// was already on-screen, we may need a call to scr_recolour()
++	if(TermImages.size() > 1) pictures_need_expose = 2; // TODO: if(&& other picts visible)
++}
++
++/*
++  From gdk/contrib/gdk-pixbuf-xlib/gdk-pixbuf-xlibrgb.c:xlib_draw_rgb_image_core(),
++  gdk_pixbuf_xlib_render_to_drawable() relies on XPutImage().
++  That means no exposure notification is available
++  // http://tronche.com/gui/x/xlib/events/exposure/graphics-expose-and-no-expose.html
++  // XSetGraphicsExposures(dpy, gc, true);
++  That's why we needs to compute `pictures_disp_*` here
++  and in rxvt_term::pictures_set_next_expose().
++*/
++
++void rxvt_term::render_pictures() {
++	pictures_disp_w = 0;
++
++	for (_InTermImage **img = TermImages.begin ();
++	     img != TermImages.end ();
++	     img++) {
++
++		// TODO: start from end() and return if !(*img)->visible()
++		if(! (*img)->visible()) continue;
++
++
++		// store the screen width an image occupies so we
++		// can refresh (even empty) lines up to this width when
++		// we scroll
++		// TODO: what about picture starting at col N ?
++		// => currently this refreshes from 0 up to N
++		pictures_disp_w = max(pictures_disp_w, (*img)->width);
++
++		// IMAGE_FULLY_VISIBLE(TermImages) ?
++
++		// http://developer.gnome.org/gdk-pixbuf/stable/gdk-pixbuf-Xlib-Rendering.html#gdk-pixbuf-xlib-render-threshold-alpha
++		gdk_pixbuf_xlib_render_to_drawable((*img)->pictures, vt, gc, 0, 0,
++						   Width2Pixel((*img)->pos.col),
++						   Row2Pixel((*img)->pos.row - (term_start + view_start)),
++						   (*img)->width, (*img)->height, XLIB_RGB_DITHER_NONE, 0, 0);
++	}
++}
++#endif
++
+ /*----------------------- end-of-file (C source) -----------------------*/
+ 
+diff --git a/src/image.C b/src/image.C
+new file mode 100644
+index 0000000..9e36621
+--- /dev/null
++++ b/src/image.C
+@@ -0,0 +1,353 @@
++/**
++ * Copyright (c) 2013, Raphaël.Droz + floss @ Gmail dot COM
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
++ *
++ * Image display support for rxvt-unicode
++ * @see doc/images.txt
++ *
++**/
++
++#include "../config.h"
++#include "rxvt.h"
++
++
++#define IS(x) (flags & (x))
++#define SET(x) (flags |= x)
++#define UNSET(x) (flags &= ~x)
++#define SETUNSET(x, y) ({ SET(x); UNSET(y); })
++
++
++_InTermImage::~_InTermImage() {
++	//print_info();
++
++	g_object_unref(pictures);
++	free(filename);
++	pictures = NULL; filename = NULL;
++}
++
++_InTermImage::_InTermImage(rxvt_term *term, char *filename,
++		     GdkPixbuf *new_image, unsigned int flags)
++	: t(term), filename(filename), pictures(new_image), flags(flags)
++{
++	this->height = gdk_pixbuf_get_height(this->pictures);
++	this->width = gdk_pixbuf_get_width(this->pictures);
++}
++
++GdkPixbuf* _InTermImage::getGdkPixbuf(char *file, unsigned int flags, int sw, int sh) {
++	// see http://developer.gnome.org/gdk-pixbuf/stable/gdk-pixbuf-File-Loading.html
++	if(IS(IMG_SIZED))
++		return gdk_pixbuf_new_from_file_at_size (file, sw, sh, NULL);
++
++	if(IS(IMG_SCALED))
++		return gdk_pixbuf_new_from_file_at_scale (file, sw, sh, IS(IMG_RATIO), NULL);
++
++	return gdk_pixbuf_new_from_file (file, NULL);
++}
++
++
++
++
++// width of an image converted in rows
++// => ceil ( Image-width [px] / Font-width [px] )
++int _InTermImage::ceil_width() {
++	return 1 + (width - 1) / t->fwidth ;
++}
++
++// height of an image converted in rows
++// => ceil ( Image-height [px] / Font-height [px] )
++int _InTermImage::ceil_height() {
++	return 1 + (height- 1) / t->fheight;
++}
++
++int _InTermImage::bottom_lineno() {
++	return pos.row + ceil_height();
++}
++
++bool _InTermImage::bottom_fully_visible() {
++	return bottom_lineno() < t->bottom_no();
++}
++
++// image bottom row is greater than the upper-bound
++// of the visible area of the terminal [called "display" below]
++bool _InTermImage::bottom_visible() {
++	return bottom_lineno() >= t->term_start + t->view_start;
++}
++
++// true if, at least partly, visible
++bool _InTermImage::visible() {
++	return pos.row <= t->bottom_no() && bottom_visible();
++}
++
++
++
++void _InTermImage::set_pos(int x, int y) {
++	// default
++	pos.col = t->screen.cur.col;
++	// position since the begining of the scrollback + the current
++	// position relative to the visible part.
++	pos.row = t->term_start + t->screen.cur.row;
++
++	// align right
++	if(IS(IMG_EOL)) {
++		pos.col = t->ncol - ceil_width();
++	}
++	else if(IS(IMG_POS)) {
++		pos.col = x;
++		pos.row = y;
++	}
++	else if(IS(IMG_RPOS)) {
++		pos.col = t->screen.cur.col + x;
++		pos.row = t->term_start + t->view_start + y;
++	}
++	// default positionning is over width and WRAP is active
++	else if(IS(IMG_WRAP) && t->fwidth < t->col2pixel(pos.col) + width) {
++		// should trigger a refresh including this picture
++		// before our final set_cursor() happens, but that won't
++		// hurt
++		while (t->pictures_next_vpad--) t->scr_index(UP);
++		t->pictures_next_vpad = 0;
++		pos.col = 0;
++		// set picture as "inlined"... (on a new line)
++		SET(IMG_CVPAD|IMG_HPAD); UNSET(IMG_VPAD);
++	}
++
++	//print_info();
++	//_InTermImage::print_flags(flags);
++}
++
++
++void _InTermImage::set_cursor() {
++	int newlines = ceil_height();
++	// increment the number of NL we will need to add... (later)
++	if(IS(IMG_CVPAD))
++		t->pictures_next_vpad = max(t->pictures_next_vpad, newlines);
++
++	// HPAD implies no VPAD
++	if(IS(IMG_HPAD)) {
++		t->scr_gotorc(0, ceil_width(), RELATIVE);
++		return;
++	}
++
++	if(IS(IMG_VPAD)) {
++		// Add newlines
++		// This happens before the new picture is actually displayed,
++		// so we avoid one more round-trip (display images, add lines, refresh images)
++		if(t->pictures_next_vpad) newlines = t->pictures_next_vpad;
++		while (newlines--) t->scr_index(UP);
++		t->screen.cur.col = 0;
++		t->pictures_next_vpad = 0;
++	}
++}
++
++void _InTermImage::request_reexpose(int old_view_start, int new_view_start) {
++	if(! visible()) return;
++
++	// scrolling up: top lines displayed risk garbling
++	if(new_view_start < old_view_start) {
++		unsigned int curstart = t->row2pixel(pos.row - t->top_no());
++		unsigned int nextstart = t->row2pixel(pos.row - ( t->term_start + new_view_start ) );
++
++		t->pictures_need_expose = 1;
++
++		t->pictures_disp_y = 0;
++		// useless, because rxvt_term::scr_expose() use FAST_REFRESH
++		/* if(!pictures_disp_y) pictures_disp_y = curstart;
++		   else pictures_disp_y = min(pictures_disp_y, curstart);*/
++
++
++		// t->pictures_disp_h = max(t->pictures_disp_h, t->row2pixel(old_view_start - new_view_start));
++		t->pictures_disp_h = t->height;
++	}
++
++	// scrolling down, pict is pushed up, text appears below and some text
++	// now covers the pixels that used to be from an image.
++	// This is the part that needs refresh.
++	// note: t->height == window's height in pixels
++	else if(new_view_start > old_view_start) {
++		unsigned int curend = t->row2pixel(pos.row - t->top_no()) + height;
++		unsigned int nextend = t->row2pixel(pos.row - ( t->term_start + new_view_start ) ) + height;
++
++		// even after scrolling down, picture bottom continues is even
++		// more below the visible area of the terminal window. No bottom
++		// text line needs refresh
++		if(nextend > t->height) {
++			return;
++		}
++
++		t->pictures_need_expose = 1;
++		if(! bottom_fully_visible()) {
++			t->pictures_disp_y = min(t->pictures_disp_y, min(nextend, t->height));
++			t->pictures_disp_h = max(t->pictures_disp_h, t->height - t->pictures_disp_y);
++		}
++
++		/*
++		  because we probably added 1 more row than what height
++		  exactly represents
++		  and because the last row covered by the pict should not drag garbage,
++		  we round it back thus the "1" more line
++		*/
++		else {
++			t->pictures_disp_y = max(0, nextend - t->row2pixel(1));
++			t->pictures_disp_h = max(t->pictures_disp_h, curend - nextend);
++		}
++	}
++}
++
++
++void _InTermImage::recompute_pos(int prev_total_rows) {
++	// recompute when column number changes
++	if(IS(IMG_WRAP)) {
++		if(IS(IMG_EOL)) {
++			// already fit but could move to the right
++			if(t->fwidth < t->col2pixel(pos.col) + width &&
++			   pos.col != t->ncol - ceil_width()) {
++				pos.col = t->ncol - ceil_width();
++				t->pictures_need_expose = 2;
++			}
++			// TODO:
++			// if pos.col > t->ncol - ceil_width(), we should wrap properly
++			// and pictures_need_expose is not needed
++		}
++		else {
++			// TODO
++		}
++	}
++
++	// printf("[prev image pos] = %d\n", pos.row);
++
++	// circular buffer already initialized, term_start didn't jump
++	if(t->term_start_jam) {
++		pos.row += (t->total_rows - prev_total_rows);
++	}
++	else {
++		int prev_index_from_bottom = t->prev_nrow - pos.row - t->top_row;
++		pos.row = t->total_rows - prev_index_from_bottom - (t->nrow - t->prev_nrow);
++	}
++
++	// printf("[cur image pos] = %d\n", pos.row);
++}
++
++
++
++
++/*
++  sw and sh are the requested width and height to scale too, in case the
++  "scale" or "size" parameter was passed.
++  The "ratio" flag ask for ratio perservation:
++  @see doc/images.txt
++*/
++void _InTermImage::pictures_parse_params(const char *string,
++				      char * &file,
++				      unsigned int &flags,
++				      int &sw, int &sh, int &x, int &y) {
++
++	char *opt, *val, *sopt, *sval;
++
++	flags = IMG_HPAD|IMG_CVPAD|IMG_VPAD;
++	sw = 0, sh = -2, x = 0, y = 0;
++	file = strtok_r(const_cast<char *>(string), ";", &sopt);
++
++	while((opt = strtok_r(NULL, ";", &sopt))) {
++		if(!strncmp(opt, "pad", 3)) {
++			val = strtok_r(opt, ":", &sval);
++			while( (val = strtok_r(NULL, ":", &sval)) ) {
++				if(!strcmp(val, "horiz")) SET(IMG_HPAD);
++				else if(!strcmp(val, "vert")) SET(IMG_VPAD);
++				else if(!strcmp(val, "nohoriz")) UNSET( (IMG_HPAD|IMG_CVPAD) );
++				else if(!strcmp(val, "novert")) UNSET(IMG_VPAD);
++				else if(!strcmp(val, "nocum")) UNSET(IMG_CVPAD);
++			}
++		}
++
++		else if(!strncmp(opt, "dim", 3)) {
++			val = strtok_r(opt, ":", &sval);
++			while( (val = strtok_r(NULL, ":", &sval)) ) {
++				if(!strcmp(val, "scale")) SETUNSET(IMG_SCALED, IMG_SIZED);
++				else if(!strcmp(val, "size")) SETUNSET(IMG_SIZED, IMG_SCALED);
++				else if(!strcmp(val, "ratio")) SET(IMG_RATIO);
++				else if( sscanf(val, "%dx%d", &sw, &sh) != 2 ) {
++					fprintf(stderr, "can't parse a \"size\" parameter\n");
++					return;
++				}
++			}
++		}
++
++		else if(!strncmp(opt, "pos", 3)) {
++			val = strtok_r(opt, ":", &sval);
++			while( (val = strtok_r(NULL, ":", &sval)) ) {
++				if(!strcmp(val, "rel")) SET(IMG_RPOS);
++				else if(!strcmp(val, "abs")) SET(IMG_POS);
++				else if(!strcmp(val, "eol")) SET(IMG_EOL);
++				else if( sscanf(val, "%dx%d", &x, &y) != 2 ) {
++					fprintf(stderr, "can't parse a \"position\" parameter\n");
++					return;
++				}
++			}
++		}
++
++		else if(!strcmp(opt, "wrap")) {
++			SET(IMG_WRAP);
++		}
++
++		else if(!strcmp(opt, "flush")) {
++			SET(IMG_FLUSH);
++		}
++	}
++
++	//_InTermImage::print_flags(flags);
++
++	// default positionning when only coords were given:
++	// x < 0 || y < 0 => relative requested, absolute otherwise
++	if(!IS(IMG_POS) && !IS(IMG_RPOS) && (x|y)) SET( min(x, y) < 0 ? IMG_RPOS : IMG_POS );
++	// scaling or sizing makes no sense without dimensions or if both are negative
++	if(min(sh, sw) < -1) UNSET( (IMG_SIZED|IMG_SCALED) ); // will unset both
++	// size without other precision => default to "scale" if one dim == -1, "size" otherwise
++	else if(! IS(IMG_SIZED) && !IS(IMG_SCALED)) { SET( (sw < 0 || sh < 0) ? IMG_SCALED : IMG_SIZED ); }
++
++	// simple end-of-line takes priority over specific (rel or abs) position
++	if(IS(IMG_EOL)) UNSET( (IMG_POS|IMG_RPOS) );
++	// IMG_RATIO is only a handul internal flag
++	if(IS(IMG_SCALED) && (sw == -1 ^ sh == -1)) SET(IMG_RATIO);
++	// if precise position is requested, padding & co are up to the user
++	if(IS(IMG_POS) || IS(IMG_RPOS)) UNSET( (IMG_HPAD|IMG_VPAD|IMG_CVPAD) );
++	// if we pad with newlines, tabulations are senseless
++	if(IS(IMG_VPAD)) UNSET(IMG_HPAD);
++
++	//_InTermImage::print_flags(flags);
++}
++
++void _InTermImage::print_flags(unsigned int flags) {
++	fprintf(stderr,
++	        "pad\t"  "pos\t" "eol\t" "dim\n"
++	        "%s%s\t" "%s\t"  "%s\t"  "%s%s\n",
++	        IS(IMG_VPAD) ? "ve" : IS(IMG_HPAD) ? "ho" : "",
++	        IS(IMG_CVPAD) ? "|c" : "",
++
++	        IS(IMG_RPOS) ? "rel" : IS(IMG_POS) ? "abs" :
++	        IS(IMG_EOL) ? "eol" : "flow",
++
++	        IS(IMG_WRAP) ? "wrap" : "fix",
++
++	        IS(IMG_SCALED) ? "scale" : IS(IMG_SIZED) ? "size" : "orig",
++	        IS(IMG_RATIO) ? " (%)" : ""
++	        );
++}
++
++void _InTermImage::print_info() {
++	fprintf(stderr,
++		"filename: %s, flags = %d, (%dx%d @ %dx%d)\n",
++		filename, flags, width, height, pos.col, pos.row);
++}
+diff --git a/src/image.h b/src/image.h
+new file mode 100644
+index 0000000..20fae63
+--- /dev/null
++++ b/src/image.h
+@@ -0,0 +1,106 @@
++/**
++ * Copyright (c) 2013, Raphaël.Droz + floss @ Gmail dot COM
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License as published by
++ * the Free Software Foundation; either version 2 of the License, or
++ * (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
++ *
++ * Image display support for rxvt-unicode
++ * @see doc/images.txt
++ *
++ **/
++
++/*
++   # tested: ok
++   - click, mouse select, scrollbar, page-up/down, newlines
++   - reset, background
++
++   # TODO:
++   - on_resize_term() #bug: term_start goes to 1000 and up
++   - update pictures on_clear_screen()
++   - don't base coords on row, but on nrow as empty lines can exist after resizing()
++   - scrollback flushing after X pictures or X MB
++   - drag & drop (gdk || motif)
++*/
++
++
++#pragma once
++
++#include "../config.h"
++#include "rxvt.h"
++
++enum image_flags {
++	IMG_NOFLAG	= 0,
++	IMG_HPAD	= 1,
++	IMG_VPAD	= 2,
++	IMG_CVPAD	= 4,
++
++	IMG_SCALED	= 8,
++	IMG_SIZED	= 16,
++	IMG_RATIO	= 32,
++
++	IMG_FLOW	= 64,
++	IMG_RPOS	= 128,
++	IMG_POS		= 256,
++	IMG_EOL		= 512,
++
++	IMG_WRAP	= 1024,
++	IMG_FLUSH	= 2048
++};
++
++struct _InTermImage {
++	GdkPixbuf *pictures;
++	char *filename;
++	row_col_t pos;
++	unsigned int flags; // image_flags
++	unsigned int height, width; // dimension
++
++	rxvt_term *t;
++
++	// (de)initialization
++	~_InTermImage();
++	_InTermImage(rxvt_term *term, char *filename,
++	          GdkPixbuf *new_image, unsigned int flags);
++
++	// image coordinates determination and cursor manipulation
++	void set_pos(int x, int y);
++	void set_cursor();
++
++	// visibility helpers
++	int ceil_width();
++	int ceil_height();
++	int bottom_lineno();
++	bool bottom_visible();
++	bool bottom_fully_visible();
++	bool visible();
++
++	// set whether or not one window area needs refresh (pictures_need_expose)
++	// and set pictures_disp_[yhw] values accordingly
++	void request_reexpose(int view_start, int new_view_start);
++	// attempt to recompute images position after the guide value (term_start)
++	// changed (terminal window resizing)
++	void recompute_pos(int prev_total_rows);
++
++	// parse the initialization string
++	static void pictures_parse_params(const char *string, char * &file,
++	                                  unsigned int &flags,
++	                                  int &sw, int &sh, int &x, int &y);
++	// gdkpixbuf creation happens in command.C soon before the
++	// _InTermImage is actually instanciated.
++	static GdkPixbuf* getGdkPixbuf(char *file, unsigned int flags,
++	                                          int sw, int sh);
++
++	// debugging purpose. TODO: #ifdef
++	static void print_flags(unsigned int flags);
++	void print_info();
++};
+diff --git a/src/init.C b/src/init.C
+index b503966..abbc716 100644
+--- a/src/init.C
++++ b/src/init.C
+@@ -561,6 +561,12 @@ rxvt_term::init_vars ()
+   set_option (Opt_iso14755);
+   set_option (Opt_iso14755_52);
+   set_option (Opt_buffered);
++
++#if HAVE_IMAGES
++  pictures_next_vpad = 0;
++  pictures_need_expose = 0;
++  term_start_jam = false;
++#endif
+ }
+ 
+ /*----------------------------------------------------------------------*/
+@@ -1466,6 +1472,10 @@ rxvt_term::create_windows (int argc, const char *const *argv)
+                             pix_colors_focused[Color_fg],
+                             pix_colors_focused[Color_bg]);
+ 
++#ifdef HAVE_IMAGES
++  xlib_rgb_init_with_depth(dpy, DefaultScreenOfDisplay(dpy), -1);
++#endif
++
+   attributes.bit_gravity = NorthWestGravity;
+   XChangeWindowAttributes (dpy, vt, CWBitGravity, &attributes);
+ 
+diff --git a/src/rxvt.h b/src/rxvt.h
+index c90b9b7..c6f609c 100644
+--- a/src/rxvt.h
++++ b/src/rxvt.h
+@@ -75,6 +75,9 @@ typedef  int32_t tlen_t_; // specifically for use in the line_t structure
+ 
+ #if HAVE_PIXBUF
+ # include <gdk-pixbuf/gdk-pixbuf.h>
++#if HAVE_IMAGES
++# include <gdk-pixbuf-xlib/gdk-pixbuf-xlib.h>
++#endif
+ #endif
+ 
+ #if defined(BG_IMAGE_FROM_FILE) || defined(ENABLE_TRANSPARENCY)
+@@ -494,6 +497,7 @@ enum {
+   Rxvt_restoreBG         = 49,
+ 
+   Rxvt_Pixmap            = 20,      // new bg pixmap
++  Rxvt_Images            = 21,      // insert a picture
+   Rxvt_dumpscreen        = 55,      // dump scrollback and all of screen
+ 
+   URxvt_locale           = 701,     // change locale
+@@ -918,6 +922,10 @@ typedef struct
+   int col;
+ } row_col_t;
+ 
++#ifdef HAVE_IMAGES
++#include "image.h"
++#endif
++
+ /*
+  * terminal limits:
+  *
+@@ -1222,6 +1230,45 @@ struct rxvt_term : zero_initialized, rxvt_vars, rxvt_screen
+   }
+ #endif
+ 
++#ifdef HAVE_IMAGES
++  // handful
++  int bottom_no() {
++	  return term_start + view_start + nrow - 1;
++  }
++  int top_no() {
++	  return term_start + view_start;
++  }
++  int32_t row2pixel(int32_t n) {
++	  return (int32_t)(n) * (int32_t)fheight;
++  }
++  int32_t col2pixel(int32_t n) {
++	  return (int32_t)(n) * (int32_t)fwidth;
++  }
++
++  simplevec<_InTermImage *> TermImages;
++  // next vertical padding when several images are
++  // displayed on a same line
++  uint8_t pictures_next_vpad;
++
++  void register_picture(const char *string);
++  void render_pictures();
++
++  // screen refresh
++  uint16_t  pictures_need_expose;
++  uint16_t  pictures_disp_w;
++  uint16_t  pictures_disp_y;
++  uint16_t  pictures_disp_h;
++  void pictures_set_next_expose(int view_start, int new_view_start);
++  bool term_start_jam;
++  void image_recompute_pos(int prev_total_rows);
++
++  // cleanup scrollback, handle screen reset
++  int  pictures_size_limit;
++  int  pictures_limit;
++  void destroy_pictures();
++  void pictures_cleanup_scrollback(int byno, int bymem);
++#endif
++
+ #if ENABLE_OVERLAY
+   overlay_base ov;
+ 
+diff --git a/src/screen.C b/src/screen.C
+index 29b26fa..00bfd10 100644
+--- a/src/screen.C
++++ b/src/screen.C
+@@ -43,9 +43,18 @@ fill_text (text_t *start, text_t value, int len)
+ /* ------------------------------------------------------------------------- *
+  *             GENERAL SCREEN AND SELECTION UPDATE ROUTINES                  *
+  * ------------------------------------------------------------------------- */
++#ifdef HAVE_IMAGES
++#define ZERO_SCROLLBACK()                                              \
++    if (option (Opt_scrollTtyOutput) && view_start) {	       	       \
++	pictures_set_next_expose(view_start, 0);      		       \
++	view_start = 0;					      	       \
++    }
++#else
+ #define ZERO_SCROLLBACK()                                              \
+     if (option (Opt_scrollTtyOutput))                                  \
+         view_start = 0
++#endif
++
+ #define CLEAR_SELECTION()                                              \
+     selection.beg.row = selection.beg.col                              \
+         = selection.end.row = selection.end.col = 0
+@@ -378,7 +387,11 @@ rxvt_term::scr_reset ()
+           // make sure all terminal lines exist
+           while (top_row > 0)
+             scr_blank_screen_mem (ROW (--top_row), DEFAULT_RSTYLE);
+-        }
++
++#ifdef HAVE_IMAGES
++	  image_recompute_pos(prev_total_rows);
++#endif
++	}
+       else
+         {
+           // if no scrollback exists (yet), wing, instead of wrap
+@@ -449,6 +462,10 @@ rxvt_term::scr_poweron ()
+ {
+   scr_release ();
+ 
++#ifdef HAVE_IMAGES
++  destroy_pictures();
++#endif
++
+   prev_nrow = prev_ncol = 0;
+   rvideo_mode = false;
+   scr_soft_reset ();
+@@ -640,6 +657,10 @@ rxvt_term::scr_scroll_text (int row1, int row2, int count) NOTHROW
+   if (count == 0 || (row1 > row2))
+     return 0;
+ 
++#ifdef HAVE_IMAGES
++  pictures_set_next_expose(view_start, view_start + count);
++#endif
++
+   want_refresh = 1;
+   num_scr += count;
+ 
+@@ -1869,6 +1890,14 @@ rxvt_term::scr_expose (int x, int y, int ewidth, int eheight, bool refresh) NOTH
+ 
+   num_scr_allow = 0;
+ 
++#ifdef HAVE_IMAGES
++  // avoid loop, as pictures_need_expose is used inside scr_refresh()
++  // but if pictures_need_expose == 2, scr_expose() is not what we expected
++  // and a full refresh could still be needed: don't reset that flag.
++  if(pictures_need_expose == 1) pictures_need_expose = 0;
++  pictures_disp_y = pictures_disp_w = pictures_disp_h = 0;
++#endif
++
+   if (refresh)
+     scr_refresh ();
+ }
+@@ -1917,6 +1946,15 @@ rxvt_term::scr_changeview (int new_view_start) NOTHROW
+   if (new_view_start == view_start)
+     return false;
+ 
++#ifdef HAVE_IMAGES
++  /*
++    TODO: if there were images on the screen
++    here we need scr_expose() to fully refresh area
++    which used to be covered by the image
++  */
++  pictures_set_next_expose(view_start, new_view_start);
++#endif
++
+   num_scr += new_view_start - view_start;
+   view_start = new_view_start;
+   want_refresh = 1;
+@@ -2041,6 +2079,32 @@ rxvt_term::scr_refresh () NOTHROW
+   rend_t ccol1,  /* Cursor colour       */
+          ccol2;  /* Cursor colour2      */
+ 
++#ifdef HAVE_IMAGES
++  if(pictures_need_expose == 2) {
++	  // avoid loop, as scr_expose will call scr_refresh
++	  pictures_need_expose = 0;
++	  pictures_disp_y = pictures_disp_w = pictures_disp_h = 0;
++
++	  // call scr_touch(), which reexpose the whole screen
++	  scr_touch(true);
++	  // or scr_recolour(true) if backgroud
++	  return;
++  }
++  else if(pictures_need_expose == 1) {
++	  if(!pictures_disp_h) {
++		  pictures_need_expose = pictures_disp_y = pictures_disp_w = pictures_disp_h = 0;
++		  // error-handling: !pictures_disp_h should not happens if(pictures_need_expose)
++	  }
++	  else {
++		  // see rxvt_term::pictures_set_next_expose()
++		  scr_expose ( 0, pictures_disp_y,
++			       pictures_disp_w, pictures_disp_h,
++			       true );
++		  return;
++	  }
++  }
++#endif
++
+   want_refresh = 0;        /* screen is current */
+ 
+   if (refresh_type == NO_REFRESH || !mapped)
+@@ -2497,6 +2561,10 @@ rxvt_term::scr_refresh () NOTHROW
+ #endif
+   HOOK_INVOKE ((this, HOOK_REFRESH_END, DT_END));
+ 
++#ifdef HAVE_IMAGES
++  render_pictures();
++#endif
++
+   scr_reverse_selection ();
+ 
+   screen.flags = old_screen_flags;
+@@ -3684,5 +3752,93 @@ rxvt_term::scr_swap_overlay () NOTHROW
+ }
+ 
+ #endif
++
++#ifdef HAVE_IMAGES
++/*
++  This is called during scrolling or any other even implying image move on
++  screen, but before refresh actually happens.
++
++  Here is defined whether or not images will need refresh by setting
++  the `pictures_need_expose` bit and setup the part of the screen which will
++  need characters rewritten after the image scrolled.
++  (since render_pictures() can't know how much it changed from the previous
++  drawing).
++
++  If `pictures_need_expose` == 1 the next time scr_refresh() is fired,
++  a preliminary (but carefully restricted) call to scr_expose
++  will be made so no artifact are left from lines where the image does not
++  occupy anymore.
++  If `pictures_need_expose` == 2 the next time scr_refresh() is fired,
++  a call to scr_expose will be made covering the whole screen.
++
++
++  4 cases needs this precaution:
++
++  1) direct scrolling:
++  This is the original reason of the `new_view_start` parameter
++  This is done with a call from scr_changeview()
++  ( with scr_page() in mind )
++
++  2) adding a line ( scr_add_lines() ) and
++  2") having the last line to wrap (implying adding lines):
++  Both imply a call to scr_scroll_text() where minlines[count] is known.
++  In such a case new_view_start = view_start + count
++
++  3) resizing: TODO
++
++  4) each time output happens while view_start is < 0 what triggers
++  ZERO_SCROLLBACK
++
++
++  TODO: the first time we scr_index(UP) (after a picture is registered)
++  we don't need this function to run and should avoid that.
++  TODO: "quick"-scrolling leave garbage anyway.
++  TODO: use gdk_pixbuf_new_subpixbuf() so we can compute here the next region ?
++*/
++
++void rxvt_term::pictures_set_next_expose(int view_start, int new_view_start) {
++	// that means render_pictures() didn't display anything the last time
++	// it was called or a full-refresh is already queued.
++	if(pictures_disp_w == 0 || pictures_need_expose == 2) {
++		return;
++	}
++
++	// more than one screen up or down, then
++	// no need for a partial refresh, the whole is needed
++	if(abs(view_start - new_view_start) >= nrow) {
++		pictures_need_expose = 2;
++		return;
++	}
++
++	if(TermImages.size() > 1) {
++		pictures_need_expose = 2;
++		return;
++	}
++
++	for (_InTermImage **img = TermImages.begin(); img != TermImages.end(); img++) {
++		(*img)->request_reexpose(view_start, new_view_start);
++	}
++}
++
++void rxvt_term::image_recompute_pos(int prev_total_rows) {
++	/* printf("[image_recompute_pos] term_start = %d, view_start = %d, top_row = %d,"
++	       " prev_total_rows = %d, total_rows = %d; prev_nrow = %d, nrow = %d\n",
++	       term_start, view_start, top_row, prev_total_rows, total_rows, prev_nrow, nrow);*/
++
++	for (_InTermImage **img = TermImages.begin(); img != TermImages.end(); img++)
++		(*img)->recompute_pos(prev_total_rows);
++	term_start_jam = true;
++	pictures_need_expose = 2;
++}
++
++
++void rxvt_term::destroy_pictures() {
++	// <simplevect>clear() wouldn't call each ~destructor()
++	for (_InTermImage **img = TermImages.begin(); img != TermImages.end(); img++)
++		delete *img;
++	TermImages.clear();
++}
++#endif
++
+ /* ------------------------------------------------------------------------- */
+ 
